@@ -1,0 +1,106 @@
+- set_fact:
+    pxe_dir: '{{ tftp_root }}/{{ ks.value.pxe_subdir }}'
+    uefi_dir: '{{ tftp_root }}/{{ ks.value.uefi_subdir }}'
+    uefi_subdir: '{{ ks.value.uefi_subdir }}'
+  tags:
+    - config
+
+- name: pxe_diretory
+  file:
+    path: '{{ pxe_dir }}'
+    state: directory
+
+- name: bootloader_for_bios
+  copy:
+    src: pxelinux.0
+    dest: '{{ pxe_dir }}/pxelinux.0'
+
+- name: copy_initrd.img_and_vmlinuz
+  copy:
+    src: '{{ mnt_point }}/images/pxeboot/{{ item }}'
+    dest: '{{ pxe_dir }}/{{ item }}'
+  with_items:
+    - initrd.img
+    - vmlinuz
+
+- name: vmlinuz_mode
+  file:
+    dest: '{{ pxe_dir }}/vmlinuz'
+    mode: '755'
+
+- name: pxe_config_dir
+  file:
+    path: '{{ pxe_dir }}/pxelinux.cfg'
+    state: directory
+
+- name: copy_menu.c32
+  copy:
+    src: menu.c32
+    dest: '{{ pxe_dir }}/menu.c32'
+
+- name: grub.menu
+  template:
+    src: default.j2
+    dest: '{{ pxe_dir }}/pxelinux.cfg/default'
+  vars:
+    kickstart_server: '{{ ks.key }}'
+  tags:
+    - config
+    - grub_config
+
+- name: ks.cfg_files
+  template:
+    src: '{{ item.key }}.j2'
+    dest: '{{ www_root }}/{{ ks.value.dc }}_{{ item.key }}'
+  with_dict: '{{ ks.value.ks_files }}'
+  vars:
+    kickstart_server: '{{ ks.key }}'
+
+- name: uefi_directory
+  file:
+    path: '{{ uefi_dir }}'
+    state: directory
+
+- name: bootloader_for_uefi
+  copy:
+    src: '{{ item }}'
+    dest: '{{ uefi_dir }}/{{ item }}'
+  with_items:
+    - shim.eif
+    - grubx64.efi
+
+- name: copy_initrd.img_and_vmlinuz
+  copy:
+    src: ' {{ mnt_point }}/images/pxeboot/{{ item }}'
+    dest: '{{ uefi_dir }}/{{ item }}'
+  with_items:
+    - initrd.img
+    - vmlinuz
+
+- name: grubx64.efi_and_vmlinuz_mode
+  file:
+    dest: '{{ uefi_dir }}/{{ item }}'
+    mode: '755'
+  with_items:
+    - grubx64.efi
+    - vmlinuz
+
+- name: grub_menu_for_uefi
+  template:
+    src: grub.cfg.j2
+    dest: '{{ uefi_dir }}/grub.cfg'
+  vars:
+    kickstart_server: '{{ ks.key }}'
+  tags:
+    - config
+    - grub_config
+
+- name: /etc/hosts
+  lineinfile:
+    dest: /etc/hosts
+    state: present
+    regexp: '~{{ item.value.ipaddr }}'
+    line: '{{ item.value.ipaddr }} {{ item.key }}'
+  with_dict: '{{ ks.value.nodes }}'
+
+### EOF ###
